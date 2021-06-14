@@ -34,6 +34,8 @@ public class PrimaryController implements Initializable {
     Mahasiswa[] listMahasiswa;
 
     private int indexOfMahasiswa = 0;
+    private Mahasiswa[] listMahasiswa;
+    private DataPuller puller;
 
     public int getIndexOfMahasiswa() {
         return indexOfMahasiswa;
@@ -53,15 +55,42 @@ public class PrimaryController implements Initializable {
         try {
             puller = new SIAkadDataPuller();
             listMahasiswa = puller.pullMahasiswas();
-            listMahasiswa[this.getIndexOfMahasiswa()] = puller.pullMahasiswaDetail(listMahasiswa[this.getIndexOfMahasiswa()]);
-            this.updateView(listMahasiswa[this.getIndexOfMahasiswa()]);
-            this.setIndexOfMahasiswaAndPreload(this.getIndexOfMahasiswa() + 1);
-            Timeline timeline = new Timeline(
-                    new KeyFrame(
-                            Duration.seconds(15), // May need to adjust longer if internet is slow
-                            event -> {
+        } catch (IllegalStateException ex) {
+            Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        if (listMahasiswa != null) {
+            try {
+                listMahasiswa[this.getIndexOfMahasiswa()] = puller.pullMahasiswaDetail(listMahasiswa[this.getIndexOfMahasiswa()]);
+                this.updateView(listMahasiswa[this.getIndexOfMahasiswa()]);
+                this.setIndexOfMahasiswa(this.getIndexOfMahasiswa() + 1);
+            } catch (IOException ex) {
+                Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
+            }
+        } else {
+            updateView();
+        }
+        Timeline timeline = new Timeline(
+                new KeyFrame(
+                        Duration.seconds(5),
+                        event -> {
+                            if (listMahasiswa == null) {
+                                updateView();
+                                try {
+                                    puller = new StudentPortalDataPuller();
+                                    listMahasiswa = puller.pullMahasiswas();
+                                } catch (IllegalStateException ex) {
+                                    Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
+                                }
+                            } else {
                                 if (this.getIndexOfMahasiswa() == listMahasiswa.length) {
                                     this.setIndexOfMahasiswaAndPreload(0);
+                                } else {
+                                    if (listMahasiswa[this.getIndexOfMahasiswa()].getTanggalLahir() == null) {
+                                        listMahasiswa[this.getIndexOfMahasiswa()] = puller.pullMahasiswaDetail(listMahasiswa[this.getIndexOfMahasiswa()]);
+                                    }
+                                }
+                                if (listMahasiswa[this.getIndexOfMahasiswa()].getTanggalLahir() == null) {
+                                    updateView();
                                 } else {
                                     try {
                                         this.updateView(listMahasiswa[this.getIndexOfMahasiswa()]);
@@ -71,16 +100,24 @@ public class PrimaryController implements Initializable {
                                     }
                                 }
                             }
-                    )
-            );
-            timeline.setCycleCount(Animation.INDEFINITE);
-            timeline.play();
+                        }
+                )
+        );
+        timeline.setCycleCount(Animation.INDEFINITE);
+        timeline.play();
 
-        } catch (IllegalStateException ex) {
-            Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
-            Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
-        }
+    }
+
+    public void updateView() {
+        this.foto.setVisible(false);
+        this.nama.setText("Pastikan koneksi internet berfungsi dengan normal!");
+        this.angkatan.setText("-");
+        this.usia.setText("-");
+        this.status.setText("-");
+        this.email.setText("-");
+        this.toefl.setText("-");
+        this.ipk.setText("-");
+        this.sks.setText("-");
     }
 
     public void updateView(Mahasiswa mahasiswa) throws IOException {
@@ -97,7 +134,12 @@ public class PrimaryController implements Initializable {
         this.nama.setText(mahasiswa.getNama());
         this.angkatan.setText(mahasiswa.getTahunAngkatan() + "");
         this.usia.setText(Period.between(mahasiswa.getTanggalLahir(), LocalDate.now()).getYears() + " tahun " + Period.between(mahasiswa.getTanggalLahir(), LocalDate.now()).getMonths() + " bulan " + " (lahir " + mahasiswa.getTanggalLahir().toString() + ")");
-        this.status.setText("Tidak Tersedia");
+        if (mahasiswa.getStatus()!=null) {
+            this.status.setText(mahasiswa.getStatus().toString());
+        }
+        else{
+            this.status.setText("Tidak Tersedia");
+        }
         this.email.setText(mahasiswa.getEmailAddress());
         if (mahasiswa.getNilaiTOEFL() != null && mahasiswa.getNilaiTOEFL().size() > 0) {
             this.toefl.setText(mahasiswa.getNilaiTOEFL().get(mahasiswa.getNilaiTOEFL().firstKey()).toString());
@@ -105,7 +147,7 @@ public class PrimaryController implements Initializable {
             this.toefl.setText("Tidak Tersedia");
         }
         TahunSemester tahunSemesterTerakhir = null;
-        for (Mahasiswa.Nilai nilai: mahasiswa.getRiwayatNilai()) {
+        for (Mahasiswa.Nilai nilai : mahasiswa.getRiwayatNilai()) {
             if (tahunSemesterTerakhir == null || nilai.getTahunSemester().compareTo(tahunSemesterTerakhir) > 0) {
                 tahunSemesterTerakhir = nilai.getTahunSemester();
             }
