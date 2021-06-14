@@ -29,10 +29,6 @@ public class PrimaryController implements Initializable {
     @FXML
     private ImageView foto;
 
-    DataPuller puller;
-
-    Mahasiswa[] listMahasiswa;
-
     private int indexOfMahasiswa = 0;
     private Mahasiswa[] listMahasiswa;
     private DataPuller puller;
@@ -41,9 +37,8 @@ public class PrimaryController implements Initializable {
         return indexOfMahasiswa;
     }
 
-    public void setIndexOfMahasiswaAndPreload(int indexOfMahasiswa) {
+    public void setIndexOfMahasiswa(int indexOfMahasiswa) {
         this.indexOfMahasiswa = indexOfMahasiswa;
-        new MahasiswaDetailPuller(listMahasiswa[indexOfMahasiswa]).start();
     }
 
     public PrimaryController() throws IOException {
@@ -55,7 +50,7 @@ public class PrimaryController implements Initializable {
         try {
             puller = new SIAkadDataPuller();
             listMahasiswa = puller.pullMahasiswas();
-        } catch (IllegalStateException ex) {
+        } catch (Exception ex) {
             Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
         }
         if (listMahasiswa != null) {
@@ -76,14 +71,14 @@ public class PrimaryController implements Initializable {
                             if (listMahasiswa == null) {
                                 updateView();
                                 try {
-                                    puller = new StudentPortalDataPuller();
+                                    puller = new SIAkadDataPuller();
                                     listMahasiswa = puller.pullMahasiswas();
-                                } catch (IllegalStateException ex) {
+                                } catch (Exception ex) {
                                     Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
                                 }
                             } else {
                                 if (this.getIndexOfMahasiswa() == listMahasiswa.length) {
-                                    this.setIndexOfMahasiswaAndPreload(0);
+                                    this.setIndexOfMahasiswa(0);
                                 } else {
                                     if (listMahasiswa[this.getIndexOfMahasiswa()].getTanggalLahir() == null) {
                                         listMahasiswa[this.getIndexOfMahasiswa()] = puller.pullMahasiswaDetail(listMahasiswa[this.getIndexOfMahasiswa()]);
@@ -94,7 +89,7 @@ public class PrimaryController implements Initializable {
                                 } else {
                                     try {
                                         this.updateView(listMahasiswa[this.getIndexOfMahasiswa()]);
-                                        this.setIndexOfMahasiswaAndPreload(this.getIndexOfMahasiswa() + 1);
+                                        this.setIndexOfMahasiswa(this.getIndexOfMahasiswa() + 1);
                                     } catch (IOException ex) {
                                         Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
                                     }
