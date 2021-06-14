@@ -1,7 +1,6 @@
 package id.ac.unpar.screensaver;
 
-//import id.ac.unpar.screensaver.siakad.SIAkadDataPuller;
-import id.ac.unpar.screensaver.studentportal.StudentPortalDataPuller;
+import id.ac.unpar.screensaver.siakad.SIAkadDataPuller;
 import id.ac.unpar.siamodels.Mahasiswa;
 import id.ac.unpar.siamodels.TahunSemester;
 import java.io.ByteArrayInputStream;
@@ -30,6 +29,10 @@ public class PrimaryController implements Initializable {
     @FXML
     private ImageView foto;
 
+    DataPuller puller;
+
+    Mahasiswa[] listMahasiswa;
+
     private int indexOfMahasiswa = 0;
     private Mahasiswa[] listMahasiswa;
     private DataPuller puller;
@@ -38,8 +41,9 @@ public class PrimaryController implements Initializable {
         return indexOfMahasiswa;
     }
 
-    public void setIndexOfMahasiswa(int indexOfMahasiswa) {
+    public void setIndexOfMahasiswaAndPreload(int indexOfMahasiswa) {
         this.indexOfMahasiswa = indexOfMahasiswa;
+        new MahasiswaDetailPuller(listMahasiswa[indexOfMahasiswa]).start();
     }
 
     public PrimaryController() throws IOException {
@@ -49,7 +53,7 @@ public class PrimaryController implements Initializable {
     @Override
     public void initialize(URL url, ResourceBundle rb) {
         try {
-            puller = new StudentPortalDataPuller();
+            puller = new SIAkadDataPuller();
             listMahasiswa = puller.pullMahasiswas();
         } catch (IllegalStateException ex) {
             Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
@@ -79,7 +83,7 @@ public class PrimaryController implements Initializable {
                                 }
                             } else {
                                 if (this.getIndexOfMahasiswa() == listMahasiswa.length) {
-                                    this.setIndexOfMahasiswa(0);
+                                    this.setIndexOfMahasiswaAndPreload(0);
                                 } else {
                                     if (listMahasiswa[this.getIndexOfMahasiswa()].getTanggalLahir() == null) {
                                         listMahasiswa[this.getIndexOfMahasiswa()] = puller.pullMahasiswaDetail(listMahasiswa[this.getIndexOfMahasiswa()]);
@@ -90,7 +94,7 @@ public class PrimaryController implements Initializable {
                                 } else {
                                     try {
                                         this.updateView(listMahasiswa[this.getIndexOfMahasiswa()]);
-                                        this.setIndexOfMahasiswa(this.getIndexOfMahasiswa() + 1);
+                                        this.setIndexOfMahasiswaAndPreload(this.getIndexOfMahasiswa() + 1);
                                     } catch (IOException ex) {
                                         Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
                                     }
@@ -150,5 +154,17 @@ public class PrimaryController implements Initializable {
         }
         this.ipk.setText(Math.round(mahasiswa.calculateIPS(tahunSemesterTerakhir) * 100.0) / 100.0 + "/" + Math.round(mahasiswa.calculateIPK() * 100.0) / 100.0);
         this.sks.setText(+mahasiswa.calculateSKSLulus() + "/" + mahasiswa.calculateSKSTempuh(false));
+    }
+
+    private class MahasiswaDetailPuller extends Thread {
+        private Mahasiswa mahasiswa;
+        public MahasiswaDetailPuller(Mahasiswa mahasiswa) {
+            this.mahasiswa = mahasiswa;
+        }
+        public void run() {
+            System.out.println("Pulling mahasiswa detail for " + mahasiswa.getNama());
+            puller.pullMahasiswaDetail(mahasiswa);
+            System.out.println("Pulled mahasiswa detail for " + mahasiswa.getNama());
+        }
     }
 }
