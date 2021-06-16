@@ -29,11 +29,10 @@ public class PrimaryController implements Initializable {
     @FXML
     private ImageView foto;
 
-    DataPuller puller;
-
-    Mahasiswa[] listMahasiswa;
-
     private int indexOfMahasiswa = 0;
+    private Mahasiswa[] listMahasiswa;
+    private boolean[] mahasiswaLoaded;
+    private DataPuller puller;
 
     public int getIndexOfMahasiswa() {
         return indexOfMahasiswa;
@@ -41,9 +40,13 @@ public class PrimaryController implements Initializable {
 
     public void setIndexOfMahasiswaAndPreload(int indexOfMahasiswa) {
         this.indexOfMahasiswa = indexOfMahasiswa;
-        new MahasiswaDetailPuller(listMahasiswa[indexOfMahasiswa]).start();
+        if (!mahasiswaLoaded[indexOfMahasiswa]) {
+            new MahasiswaDetailPuller(listMahasiswa[indexOfMahasiswa]).start();
+        } else {
+            System.out.println("No longer pulling mahasiswa detail for " + listMahasiswa[indexOfMahasiswa].getNama() + " because already pulled before");
+        }
     }
-
+    
     public PrimaryController() throws IOException {
 
     }
@@ -54,21 +57,23 @@ public class PrimaryController implements Initializable {
             puller = new SIAkadDataPuller();
             listMahasiswa = puller.pullMahasiswas();
             listMahasiswa[this.getIndexOfMahasiswa()] = puller.pullMahasiswaDetail(listMahasiswa[this.getIndexOfMahasiswa()]);
+            mahasiswaLoaded = new boolean[listMahasiswa.length];
             this.updateView(listMahasiswa[this.getIndexOfMahasiswa()]);
             this.setIndexOfMahasiswaAndPreload(this.getIndexOfMahasiswa() + 1);
             Timeline timeline = new Timeline(
                     new KeyFrame(
                             Duration.seconds(15), // May need to adjust longer if internet is slow
                             event -> {
-                                if (this.getIndexOfMahasiswa() == listMahasiswa.length) {
-                                    this.setIndexOfMahasiswaAndPreload(0);
-                                } else {
-                                    try {
+                                try {
+                                    if (mahasiswaLoaded[this.getIndexOfMahasiswa()]) {
+                                        // Update view only if mahasiswa is loaded. Otherwise, wait for next turn
                                         this.updateView(listMahasiswa[this.getIndexOfMahasiswa()]);
-                                        this.setIndexOfMahasiswaAndPreload(this.getIndexOfMahasiswa() + 1);
-                                    } catch (IOException ex) {
-                                        Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
+                                        this.setIndexOfMahasiswaAndPreload((this.getIndexOfMahasiswa() + 1) % listMahasiswa.length);
+                                    } else {
+                                        System.out.println("Mahasiswa " + listMahasiswa[this.getIndexOfMahasiswa()].getNama() + " is not ready. Waiting for next turn...");
                                     }
+                                } catch (IOException ex) {
+                                    Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
                                 }
                             }
                     )
@@ -76,9 +81,7 @@ public class PrimaryController implements Initializable {
             timeline.setCycleCount(Animation.INDEFINITE);
             timeline.play();
 
-        } catch (IllegalStateException ex) {
-            Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
-        } catch (IOException ex) {
+        } catch (IllegalStateException | IOException ex) {
             Logger.getLogger(PrimaryController.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
@@ -96,8 +99,12 @@ public class PrimaryController implements Initializable {
         }
         this.nama.setText(mahasiswa.getNama());
         this.angkatan.setText(mahasiswa.getTahunAngkatan() + "");
-        this.usia.setText(Period.between(mahasiswa.getTanggalLahir(), LocalDate.now()).getYears() + " tahun " + Period.between(mahasiswa.getTanggalLahir(), LocalDate.now()).getMonths() + " bulan " + " (lahir " + mahasiswa.getTanggalLahir().toString() + ")");
-        this.status.setText("Tidak Tersedia");
+        this.usia.setText(
+            mahasiswa.getTanggalLahir() != null ?
+            (Period.between(mahasiswa.getTanggalLahir(), LocalDate.now()).getYears() + " tahun " + Period.between(mahasiswa.getTanggalLahir(), LocalDate.now()).getMonths() + " bulan (lahir " + mahasiswa.getTanggalLahir().toString() + ")") :
+            "Tidak tersedia"
+        );
+        this.status.setText(mahasiswa.getStatus() != null ? mahasiswa.getStatus().toString() : "Tidak Tersedia");
         this.email.setText(mahasiswa.getEmailAddress());
         if (mahasiswa.getNilaiTOEFL() != null && mahasiswa.getNilaiTOEFL().size() > 0) {
             this.toefl.setText(mahasiswa.getNilaiTOEFL().get(mahasiswa.getNilaiTOEFL().firstKey()).toString());
@@ -110,7 +117,10 @@ public class PrimaryController implements Initializable {
                 tahunSemesterTerakhir = nilai.getTahunSemester();
             }
         }
-        this.ipk.setText(Math.round(mahasiswa.calculateIPS(tahunSemesterTerakhir) * 100.0) / 100.0 + "/" + Math.round(mahasiswa.calculateIPK() * 100.0) / 100.0);
+        this.ipk.setText(mahasiswa.getRiwayatNilai().isEmpty() ?
+                "Tidak tersedia" :
+                Math.round(mahasiswa.calculateIPS(tahunSemesterTerakhir) * 100.0) / 100.0 + "/" + Math.round(mahasiswa.calculateIPK() * 100.0) / 100.0
+        );
         this.sks.setText(+mahasiswa.calculateSKSLulus() + "/" + mahasiswa.calculateSKSTempuh(false));
     }
 
@@ -122,7 +132,14 @@ public class PrimaryController implements Initializable {
         public void run() {
             System.out.println("Pulling mahasiswa detail for " + mahasiswa.getNama());
             puller.pullMahasiswaDetail(mahasiswa);
-            System.out.println("Pulled mahasiswa detail for " + mahasiswa.getNama());
+            for (int i = 0; i < listMahasiswa.length; i++) {
+                if (listMahasiswa[i] == this.mahasiswa) {
+                    mahasiswaLoaded[i] = true;
+                    System.out.println("Pulled mahasiswa detail for " + mahasiswa.getNama() + " (index " + i + ")");
+                    break;
+                }
+            }
+            
         }
     }
 }

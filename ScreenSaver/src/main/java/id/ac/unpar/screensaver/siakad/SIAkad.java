@@ -53,7 +53,7 @@ public class SIAkad {
 	// it will be more flexible in case SIAkad uses different names compared
 	// to Java/OS's standard.
 	public static final String[] MONTH_NAMES = {
-		"Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"
+		"Januari", "Pebruari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"
 	};
 
     Token token = null;
@@ -247,7 +247,7 @@ public class SIAkad {
 						StringTokenizer tokenizer = new StringTokenizer(fieldValue);
 						int day = Integer.parseInt(tokenizer.nextToken());
 						int month = Arrays.asList(MONTH_NAMES).indexOf(tokenizer.nextToken()) + 1;
-						if (month < 0) {
+						if (month <= 0) {
 							throw new ProtocolException("Month name not recognized in this date: " + fieldValue);
 						}
 						int year = Integer.parseInt(tokenizer.nextToken());
