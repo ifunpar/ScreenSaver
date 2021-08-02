@@ -262,18 +262,18 @@ public class SIAkad {
 		return mahasiswa;
 	}
 
-        /**
+	/**
 	 * Mendapatkan data akademik lengkap dari mahasiswa.
-         * 
-         * Data akademik yang didapat antara lain:
-         * <ul>
-         *   <li>Riwayat nilai lengkap termasuk kelas, nilai tugas, UTS, UAS, dan NA.</li>
+	 * 
+	 * Data akademik yang didapat antara lain:
+	 * <ul>
+	 *   <li>Riwayat nilai lengkap termasuk kelas, nilai tugas, UTS, UAS, dan NA.</li>
 	 *   <li>Status akademik mahasiswa</li>
-         * </ul>
+	 * </ul>
 	 * Catatan: {@link Mahasiswa#getNpm()} tidak boleh null.
 	 *
 	 * @param mahasiswa mahasiswa yang ingin diperiksa
-         * 
+	 * 
 	 * @return objek mahasiswa yang sama, dengan nilai yang sudah didapatkan
 	 * (terurut secara kronologis dari yang paling lama ke baru).
 	 * @throws IllegalStateException jika belum login
@@ -392,16 +392,21 @@ public class SIAkad {
 	 * {@link Mahasiswa#getNpm()} tidak boleh null.
 	 *
 	 * @param mahasiswa mahasiswa yang ingin diperiksa,
-	 * @param includeLastSemester <strong>(rekomendasi: false)</strong> apakah ingin mengikutsertakan nilai semester terakhir yang tercatat.
-	 * Kelemahan metode "Data Akademik" adalah tidak bisa membedakan antara nilai yang belum rilis dengan yang sudah.
-	 * Jika mahasiswa sedang menjalani mata kuliah tersebut, nilai sudah muncul tetapi kemungkinan NA nya berisi E karena
-	 * nilai tugas/UTS/UAS belum lengkap. Jika mahasiswa sedang tidak menjalani kuliah tersebut (misal, saat FRS atau saat libur,
-	 * maka nilai semester terakhir perlu diikutsertakan, karena mengacu ke nilai yang sudah rilis). Tentu saja ke depannya perlu
-	 * mekanisme yang lebih baik yang dapat mendeteksi nilai yang sudah/belum rilis ini.
+	 * @param includeLastSemester <strong>(rekomendasi: false)</strong>
+	 * apakah ingin mengikutsertakan nilai semester terakhir yang tercatat.
+	 * Kelemahan metode "Data Akademik" adalah tidak bisa membedakan antara
+	 * nilai yang belum rilis dengan yang sudah. Jika mahasiswa sedang
+	 * menjalani mata kuliah tersebut, nilai sudah muncul tetapi kemungkinan
+	 * NA nya berisi E karena nilai tugas/UTS/UAS belum lengkap. Jika
+	 * mahasiswa sedang tidak menjalani kuliah tersebut (misal, saat FRS
+	 * atau saat libur, maka nilai semester terakhir perlu diikutsertakan,
+	 * karena mengacu ke nilai yang sudah rilis). Tentu saja ke depannya
+	 * perlu mekanisme yang lebih baik yang dapat mendeteksi nilai yang
+	 * sudah/belum rilis ini.
+	 *
+	 * @deprecated Mohon menggunakan {@link #requestDataAkademik(id.ac.unpar.siamodels.Mahasiswa) karena data yang didapat lebih lengkap.
 	 * 
-         * @deprecated Mohon menggunakan {@link #requestDataAkademik(id.ac.unpar.siamodels.Mahasiswa) karena data yang didapat lebih lengkap.
-         * 
-         * @return objek mahasiswa yang sama, dengan nilai yang sudah didapatkan
+	 * @return objek mahasiswa yang sama, dengan nilai yang sudah didapatkan
 	 * (terurut secara kronologis dari yang paling lama ke baru).
 	 * @throws IllegalStateException jika belum login
 	 * @throws IOException kesalahan komunikasi
@@ -412,15 +417,15 @@ public class SIAkad {
 			throw new IllegalStateException("Mohon login terlebih dahulu");
 		}
 		// Step 1: Dapatkan semester saat ini
-		Connection connection = createBaseConnection(SIAKAD_BASE_URL + "/data_akademik_mahasiswa/" + mahasiswa.getNpm() + "/0", this.token); 
+		Connection connection = createBaseConnection(SIAKAD_BASE_URL + "/data_akademik_mahasiswa/" + mahasiswa.getNpm() + "/0", this.token);
 		connection.method(Method.GET);
 		Connection.Response response = connection.execute();
 		logConnnection(connection);
 		Document document = Jsoup.parse(response.body(), response.url().toString());
 		Element nilaiSemesterIni = document.select("#nilai_semester_ini_tab").first();
 		String nilaiSemesterIniText = nilaiSemesterIni.text().trim();
-		TahunSemester tahunSemesterIni = new TahunSemester(nilaiSemesterIniText.substring(nilaiSemesterIniText.length() - 3));		
-		
+		TahunSemester tahunSemesterIni = new TahunSemester(nilaiSemesterIniText.substring(nilaiSemesterIniText.length() - 3));
+
 		// Step 2: Dapatkan seluruh nilai
 		List<Mahasiswa.Nilai> riwayatNilai = mahasiswa.getRiwayatNilai();
 		riwayatNilai.clear();
@@ -502,6 +507,116 @@ public class SIAkad {
 			}
 		}
 		return mahasiswa;
+	}
+
+	/**
+	 * Mendapatkan mata kuliah apa saja yang dipilih oleh mahasiswa saat FRS
+	 * @param npm NPM mahasiswa
+	 * @return daftar mata kuliah yang dipilih
+	 * @throws IllegalStateException jika belum login atau mahasiswa belum melakukan FRS mandiri
+	 * @throws IOException kesalahan komunikasi
+	 */
+	public List<MataKuliah> requestSelectedMataKuliahInRegistrasiDosenWali(String npm) throws IOException {
+		if (token == null) {
+			throw new IllegalStateException("Mohon login terlebih dahulu");
+		}
+		StringBuilder url = new StringBuilder(SIAKAD_BASE_URL + "/proses_registrasi_dosen_wali/" + npm);
+		Connection connection = createBaseConnection(url.toString(), this.token);
+		connection.method(Method.GET);
+		connection.followRedirects(false);
+		Connection.Response response = connection.execute();
+		if (response.statusCode() != 200) {
+			throw new IllegalStateException("Not OK from server: " + response.statusCode() + " " + response.statusMessage() + " (usually because mahasiswa has not requested yet)");
+		}
+		logConnnection(connection);
+		Document document = Jsoup.parse(response.body(), response.url().toString());
+		List<MataKuliah> mkList = new ArrayList<>();
+		Elements rows = document.select("#simpan-registrasi-form tbody > tr");
+		for (int i = 0; i < rows.size(); i++) {
+			Elements columns = (rows.get(i)).select("td");
+			if (columns.size() == 8) {
+				final String kodeMK = columns.get(1).select("a").text();
+				final String namaMK = columns.get(2).text();
+				final int sks = Integer.parseInt(columns.get(4).text());
+				final boolean selected = "checked".equals(columns.get(5).select("input").attr("checked"));
+				if (selected) {
+					MataKuliah mk = MataKuliahFactory.getInstance().createMataKuliah(kodeMK, sks, namaMK);
+					mkList.add(mk);
+				}
+			}
+		}
+		return mkList;
+	}
+
+	/**
+	 * Mendapatkan tahun/semester yang aktif saat ini, diambil dari halaman jadwal
+	 * @return TahunSemester yang aktif
+	 * @throws IOException kesalahan jaringan
+	 */
+	public TahunSemester requestCurrentTahunSemester() throws IOException {
+		if (token == null) {
+			throw new IllegalStateException("Mohon login terlebih dahulu");
+		}
+		String url = SIAKAD_BASE_URL + "/jadwal_matakuliah"; // TODO move this to a separate method requestCurrentTahunSemester
+		Connection connection = createBaseConnection(url, this.token);
+		connection.method(Method.GET);
+		Connection.Response response = connection.execute();
+		logConnnection(connection);
+		Document document = Jsoup.parse(response.body(), response.url().toString());
+		Elements tahunElements = document.select("#tahun_semester > option");
+		String year = null;
+		for (int i = 0; i < tahunElements.size(); i++) {
+			if (tahunElements.get(i).hasAttr("selected")) {
+				year = tahunElements.get(i).attr("value");
+			}
+		}
+		Elements semesterElements = document.select("#nama_semester > option");
+		String semester = null;
+		for (int i = 0; i < semesterElements.size(); i++) {
+			if (semesterElements.get(i).hasAttr("selected")) {
+				semester = semesterElements.get(i).attr("value");
+			}
+		}
+		return new TahunSemester(Integer.parseInt(year), semester.charAt(0));
+	}
+	
+	/**
+	 * Mendapatkan jadwal kuliah seluruhnya.
+	 * @param ps program studi
+	 * @return mapping dari nama mata kuliah ke daftar jadwal kuliahnya
+	 * @throws IOException 
+	 */
+	public Map<MataKuliah, List<JadwalKuliah>> requestJadwalKuliah(ProgramStudi ps) throws IOException {
+		if (token == null) {
+			throw new IllegalStateException("Mohon login terlebih dahulu");
+		}
+		TahunSemester ts = this.requestCurrentTahunSemester();
+		String url = SIAKAD_BASE_URL + "/load_table_seluruh_mk/" + ts.getTahun() + "/" + ts.getKodeDPS().charAt(2) + "/" + ps.getSIAKADCode();
+		Connection connection = createBaseConnection(url, this.token);
+		connection.method(Method.GET);
+		Connection.Response response = connection.execute();
+		logConnnection(connection);
+		Document document = Jsoup.parse(response.body(), response.url().toString());
+		Elements rows = document.select("#data_table tbody > tr");
+		Map<MataKuliah, List<JadwalKuliah>> jadwal = new TreeMap<>();
+		for (int i = 0; i < rows.size(); i++) {
+			Elements columns = (rows.get(i)).select("td");
+			final String[] kodeMKString = columns.get(1).text().split("-");
+			final String namaMK = columns.get(2).text();
+			final String kelas = columns.get(3).text();
+			final String hariString = columns.get(5).text();
+			final String waktuString = columns.get(6).text();
+			final String ruang = columns.get(7).text();
+			final String[] dosenString = columns.get(10).text().split("-");
+			MataKuliah mk = MataKuliahFactory.getInstance().createMataKuliah(kodeMKString[0], Integer.parseInt(kodeMKString[1]), namaMK);
+			final Dosen dosen = new Dosen(dosenString[0], dosenString[1]);
+			JadwalKuliah newJK = new JadwalKuliah(mk, kelas.charAt(0), dosen, hariString, waktuString, ruang);
+			if (!jadwal.containsKey(mk)) {
+				jadwal.put(mk, new ArrayList<>(1));
+			}
+			jadwal.get(mk).add(newJK);
+		}
+		return jadwal;
 	}
 
 	/**
