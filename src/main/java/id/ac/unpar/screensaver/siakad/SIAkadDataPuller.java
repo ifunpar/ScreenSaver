@@ -53,7 +53,7 @@ public class SIAkadDataPuller extends DataPuller {
     @Override
     public Mahasiswa pullMahasiswaDetail(Mahasiswa m) {
         try {
-            siakad.requestRiwayatNilai(m, false);
+            siakad.requestDataAkademik(m);
             siakad.requestDataDiri(m);
         } catch (IllegalStateException ex) {
             Logger.getLogger(SIAkadDataPuller.class.getName()).log(Level.SEVERE, null, ex);

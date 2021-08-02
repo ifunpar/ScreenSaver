@@ -262,6 +262,128 @@ public class SIAkad {
 		return mahasiswa;
 	}
 
+        /**
+	 * Mendapatkan data akademik lengkap dari mahasiswa.
+         * 
+         * Data akademik yang didapat antara lain:
+         * <ul>
+         *   <li>Riwayat nilai lengkap termasuk kelas, nilai tugas, UTS, UAS, dan NA.</li>
+	 *   <li>Status akademik mahasiswa</li>
+         * </ul>
+	 * Catatan: {@link Mahasiswa#getNpm()} tidak boleh null.
+	 *
+	 * @param mahasiswa mahasiswa yang ingin diperiksa
+         * 
+	 * @return objek mahasiswa yang sama, dengan nilai yang sudah didapatkan
+	 * (terurut secara kronologis dari yang paling lama ke baru).
+	 * @throws IllegalStateException jika belum login
+	 * @throws IOException kesalahan komunikasi
+	 * @see {@link #requestRiwayatNilai(Mahasiswa)}
+	 */
+	public Mahasiswa requestDataAkademik(Mahasiswa mahasiswa) throws IllegalStateException, IOException {
+		if (token == null) {
+			throw new IllegalStateException("Mohon login terlebih dahulu");
+		}
+		// Step 1: Dapatkan status mahasiswa dan semester saat ini
+		Connection connection = createBaseConnection(SIAKAD_BASE_URL + "/data_akademik_mahasiswa/" + mahasiswa.getNpm() + "/0", this.token); 
+		connection.method(Method.GET);
+		Connection.Response response = connection.execute();
+		logConnnection(connection);
+		Document document = Jsoup.parse(response.body(), response.url().toString());
+                Element dataMahasiswaTable = document.select("div.portlet table.table-condensed").first();
+                Elements dataMahasiswaCells = dataMahasiswaTable.select("td");
+                for (int i = 2; i < dataMahasiswaCells.size(); i++) {
+                    if (dataMahasiswaCells.get(i - 1).text().trim().equals(":") && dataMahasiswaCells.get(i - 2).text().trim().equals("Status Akademik")) {
+                        mahasiswa.setStatus(Mahasiswa.Status.valueOf(dataMahasiswaCells.get(i).text().toUpperCase()));
+                    }
+                }
+		Element nilaiSemesterIni = document.select("#nilai_semester_ini_tab").first();
+		String nilaiSemesterIniText = nilaiSemesterIni.text().trim();
+		TahunSemester tahunSemesterIni = new TahunSemester(nilaiSemesterIniText.substring(nilaiSemesterIniText.length() - 3));		
+		
+		// Step 2: Dapatkan seluruh nilai
+		List<Mahasiswa.Nilai> riwayatNilai = mahasiswa.getRiwayatNilai();
+		riwayatNilai.clear();
+		connection = createBaseConnection(SIAKAD_BASE_URL + "/load_nilai_per_tahun_semester/" + mahasiswa.getNpm() + "/0", this.token);
+		connection.method(Method.GET);
+		response = connection.execute();
+		logConnnection(connection);
+		document = Jsoup.parse(response.body(), response.url().toString());
+		Elements tables = document.select("table.table-condensed");
+		Pattern tahunAkademikPattern = Pattern.compile("Tahun Akademik (\\d{4})/\\d{4}");
+		Pattern semesterPattern = Pattern.compile("Semester (Ganjil|Genap|Pendek)");
+		for (Element table : tables) {
+			List<String> rowLabels;
+
+			Elements rows = table.select("tr");
+			// Row 0, 3: Tahun Akademik, Semester
+			String tahunAkademikString = rows.get(0).selectFirst("td").text().trim();
+			Matcher tahunAkademikMatcher = tahunAkademikPattern.matcher(tahunAkademikString);
+			int tahun;
+			if (tahunAkademikMatcher.matches()) {
+				tahun = Integer.parseInt(tahunAkademikMatcher.group(1));
+			} else {
+				throw new IOException("Can't find tahun akademik in SIAkad Output: " + tahunAkademikString);
+			}
+			String semesterString = rows.get(3).selectFirst("td").text().trim();
+			Matcher semesterMatcher = semesterPattern.matcher(semesterString);
+			Semester semester;
+			if (semesterMatcher.matches()) {
+				semester = Semester.fromString(semesterMatcher.group(1));
+			} else {
+				throw new IOException("Can't find semester in SIAkad Output: " + semesterString);
+			}
+			TahunSemester tahunSemester = new TahunSemester(tahun, semester);
+
+			// Row 2: Labels
+			Elements cols = rows.get(2).select("td");
+			rowLabels = new ArrayList<>(cols.size());
+			for (Element col : cols) {
+				rowLabels.add(col.text());
+			}
+
+			// Row 4 to N-1: The grades
+			for (int i = 4; i < rows.size() - 1; i++) {
+				cols = rows.get(i).select("td");
+				String kode = cols.get(1).text();
+				String nama = cols.get(2).text();
+				int sks = Integer.parseInt(cols.get(3).text());
+				Character kelas;
+				kelas = cols.get(4).text().length() > 0 ? cols.get(4).text().charAt(0) : null;
+				Double uts = null, uas = null;
+				Map<String, Double> nilaiTugas = new TreeMap<>();
+				for (int j = 0; j < rowLabels.size(); j++) {
+					String cellText = cols.get(5 + j).text();
+					if (cellText.length() > 0) {
+						double cellValue = Double.parseDouble(cellText);
+						switch (rowLabels.get(i)) {
+							case "UTS":
+								uts = cellValue;
+								break;
+							case "UAS":
+								uas = cellValue;
+								break;
+							default:
+								nilaiTugas.put(rowLabels.get(j), cellValue);
+								break;
+						}
+					}
+				}
+				String nilaiAkhir = cols.get(cols.size() - 1).text();
+				if (nilaiAkhir.length() == 0) {
+					nilaiAkhir = null;
+				}
+				if (!tahunSemester.equals(tahunSemesterIni)) {
+					// Exclude nilai from current tahun/semester be cause most likely it's yet to be released
+					Mahasiswa.Nilai nilai = new Mahasiswa.Nilai(tahunSemester,
+						MataKuliahFactory.getInstance().createMataKuliah(kode, sks, nama), kelas, nilaiTugas, uts, uas, nilaiAkhir);
+					riwayatNilai.add(nilai);
+				}
+			}
+		}
+		return mahasiswa;
+	}
+        
 	/**
 	 * Mendapatkan daftar lengkap riwayat nilai mahasiswa, berdasarkan
 	 * halaman "Data Akademik". Metode ini dapat mengisi lengkap kelas,
@@ -277,7 +399,9 @@ public class SIAkad {
 	 * maka nilai semester terakhir perlu diikutsertakan, karena mengacu ke nilai yang sudah rilis). Tentu saja ke depannya perlu
 	 * mekanisme yang lebih baik yang dapat mendeteksi nilai yang sudah/belum rilis ini.
 	 * 
-	 * @return objek mahasiswa yang sama, dengan nilai yang sudah didapatkan
+         * @deprecated Mohon menggunakan {@link #requestDataAkademik(id.ac.unpar.siamodels.Mahasiswa) karena data yang didapat lebih lengkap.
+         * 
+         * @return objek mahasiswa yang sama, dengan nilai yang sudah didapatkan
 	 * (terurut secara kronologis dari yang paling lama ke baru).
 	 * @throws IllegalStateException jika belum login
 	 * @throws IOException kesalahan komunikasi
