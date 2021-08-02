@@ -5,8 +5,11 @@
  */
 package id.ac.unpar.screensaver.siakad;
 
+import id.ac.unpar.siamodels.Dosen;
+import id.ac.unpar.siamodels.JadwalKuliah;
 import id.ac.unpar.siamodels.JenisKelamin;
 import id.ac.unpar.siamodels.Mahasiswa;
+import id.ac.unpar.siamodels.MataKuliah;
 import id.ac.unpar.siamodels.MataKuliahFactory;
 import id.ac.unpar.siamodels.ProgramStudi;
 import id.ac.unpar.siamodels.Semester;
