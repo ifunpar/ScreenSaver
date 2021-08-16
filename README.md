@@ -1,5 +1,7 @@
 # Mahasiswa Wali Screen Saver
 
+[!screenshot](screenshot.jpg)
+
 Mahasiswa Wali Screen Saver (MWSS) is a Windows Screen Saver, that when running
 shows randomly picked mahasiswa that has you as their guardian. A user name
 and password of you is needed to access the students' information
