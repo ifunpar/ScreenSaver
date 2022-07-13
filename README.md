@@ -29,6 +29,16 @@ username = pascal@unpar.ac.id
 user.password = UNP4R123
 ```
 
+## Troubleshooting Guide
+
+If you get an error like this:
+
+```
+javax.net.ssl.SSLHandshakeException: sun.security.validator.ValidatorException: PKIX path building failed: sun.security.provider.certpath.SunCertPathBuilderException: unable to find valid certification path to requested target
+```
+
+That is because the HTTPS certificate used by SIAKAD system is somehow trusted in browser but not trusted in Java. Export the certificate from browser then import to Java, as instructed in https://stackoverflow.com/a/36427118
+
 ## Development Guide
 
 You also need the same JDK requirements as running one.
